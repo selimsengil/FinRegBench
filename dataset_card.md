@@ -28,6 +28,16 @@ with a candidate answer and an expected 3-way label.
 - Basel Framework examples: 2,700
 - Consumer Credit Protection Act examples: 300
 
+## Source Documents
+
+The current repository includes the two source PDFs used to construct the draft:
+
+- `source_documents/raw/BaselFramework.pdf`
+- `source_documents/raw/COMPS-260-Consumer-Credit-Protection-Act.pdf`
+
+Official source URLs and checksums are documented in
+`source_documents/README.md`.
+
 ## Data Fields
 
 - `id`: stable example identifier

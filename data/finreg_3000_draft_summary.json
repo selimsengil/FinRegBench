@@ -1,0 +1,31 @@
+{
+  "output_path": "data/finreg_3000_draft.jsonl",
+  "total_rows": 3000,
+  "label_counts": {
+    "contradiction": 1000,
+    "neutral": 1000,
+    "entailment": 1000
+  },
+  "doc_counts": {
+    "basel_framework": 2700,
+    "ccpa": 300
+  },
+  "doc_label_counts": {
+    "basel_framework": {
+      "contradiction": 900,
+      "neutral": 900,
+      "entailment": 900
+    },
+    "ccpa": {
+      "contradiction": 100,
+      "entailment": 100,
+      "neutral": 100
+    }
+  },
+  "split_counts": {
+    "dev": 300,
+    "test": 2700
+  },
+  "review_status": "auto_generated_needs_human_review",
+  "recommended_next_step": "Manually review a stratified sample before using this as an academic benchmark."
+}

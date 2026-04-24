@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "FinRegBench: A Draft Benchmark for Financial Regulation RAG Evaluation"
+message: "If you use this benchmark, please cite this repository or the associated paper/report."
+type: dataset
+authors:
+  - family-names: "TBD"
+    given-names: "TBD"
+repository-code: "https://github.com/TBD/FinRegBench"
+abstract: "A draft synthetic-but-evidence-grounded benchmark for retrieval, abstention, and answer verification in financial regulation RAG systems."
+keywords:
+  - retrieval-augmented generation
+  - financial regulation
+  - hallucination detection
+  - answer verification
+  - benchmark
+license: "NOASSERTION"

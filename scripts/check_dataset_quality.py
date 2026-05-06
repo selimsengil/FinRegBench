@@ -34,7 +34,16 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path)
-    parser.add_argument("--min-neutral-unique", type=int, default=900)
+    parser.add_argument(
+        "--min-neutral-unique",
+        type=int,
+        default=None,
+        help=(
+            "Minimum number of unique neutral candidate answers. Defaults to "
+            "90 percent of the neutral row count, capped at the old 900-row "
+            "threshold for the 3,000-row draft."
+        ),
+    )
     parser.add_argument("--max-old-shortcut-accuracy", type=float, default=0.75)
     args = parser.parse_args()
 
@@ -55,10 +64,15 @@ def main() -> None:
         errors.append(f"{exact_entailment} entailment rows copy evidence_span exactly")
 
     neutral_answers = {row.get("candidate_answer") for row in by_label["neutral"]}
-    if len(neutral_answers) < args.min_neutral_unique:
+    min_neutral_unique = (
+        args.min_neutral_unique
+        if args.min_neutral_unique is not None
+        else min(900, int(0.9 * len(by_label["neutral"])))
+    )
+    if len(neutral_answers) < min_neutral_unique:
         errors.append(
             f"neutral candidate answers are under-diverse: "
-            f"{len(neutral_answers)} < {args.min_neutral_unique}"
+            f"{len(neutral_answers)} < {min_neutral_unique}"
         )
 
     neutral_marker_hits = sum(

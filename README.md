@@ -9,10 +9,18 @@ derived from two public regulatory documents:
 - Basel Framework: 2,700 examples
 - Consumer Credit Protection Act: 300 examples
 
+It also includes a separate 900-example heldout test set derived only from the
+Federal Reserve Commercial Bank Examination Manual. This file is intended for
+final generalization checks and should not be used for training or model
+selection.
+
 Each example contains a user-style regulatory question, a candidate answer, a
 3-way verification label, and source evidence metadata. The current generator
 uses label-balanced question templates, reframed supported answers, and
 topic-conditioned unsupported claims to reduce surface-form shortcuts.
+The heldout test uses the same answer-verification schema, but its neutral rows
+mix same-document distractor passages with partially supported answers that add
+unsupported details, making it a harder unseen-document check.
 
 ## Status
 
@@ -37,7 +45,10 @@ FinRegBench/
   data/
     finreg_3000_draft.jsonl
     finreg_3000_draft_summary.json
+    finreg_heldout_cbe_test.jsonl
+    finreg_heldout_cbe_test_summary.json
     sample_60_for_review.jsonl
+    sample_60_heldout_cbe_for_review.jsonl
   docs/
     annotation_guidelines.md
     how_to_apply_benchmark.md
@@ -51,6 +62,7 @@ FinRegBench/
   source_documents/
     raw/
       BaselFramework.pdf
+      Commercial Bank Examination.pdf
       COMPS-260-Consumer-Credit-Protection-Act.pdf
     README.md
 ```
@@ -61,15 +73,17 @@ Validate the dataset schema:
 
 ```bash
 python3 scripts/validate_schema.py data/finreg_3000_draft.jsonl
+python3 scripts/validate_schema.py data/finreg_heldout_cbe_test.jsonl
 ```
 
 Run shortcut-oriented quality checks:
 
 ```bash
 python3 scripts/check_dataset_quality.py data/finreg_3000_draft.jsonl
+python3 scripts/check_dataset_quality.py data/finreg_heldout_cbe_test.jsonl
 ```
 
-Rebuild the draft dataset and stratified review sample:
+Rebuild the draft dataset, heldout test set, and stratified review samples:
 
 ```bash
 python3 scripts/build_benchmark.py
@@ -114,6 +128,10 @@ For deeper experiments, use three modes:
 - Oracle verification: give the gold `evidence_span` directly to the verifier.
 - Full RAG verification: retrieve evidence from PDFs, then verify the answer.
 
+Use `data/finreg_heldout_cbe_test.jsonl` only after tuning decisions are frozen.
+It is meant to test whether a detector trained on the main draft generalizes to
+an unseen, broad supervisory manual.
+
 See `docs/how_to_apply_benchmark.md` for a more detailed workflow.
 
 ## Source Documents
@@ -131,6 +149,8 @@ Recommended before release:
 
 - Review at least 300 examples, balanced by label and source document.
 - Freeze a test split that is not used for tuning.
+- Keep the Commercial Bank Examination Manual heldout file out of training and
+  model selection.
 - Report inter-annotator agreement if more than one reviewer is involved.
 - Publish exact source-document versions and hashes.
 - Report retrieval and verification metrics separately.

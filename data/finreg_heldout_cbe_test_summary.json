@@ -1,0 +1,38 @@
+{
+  "output_path": "data\\finreg_heldout_cbe_test.jsonl",
+  "total_rows": 900,
+  "label_counts": {
+    "contradiction": 300,
+    "entailment": 300,
+    "neutral": 300
+  },
+  "doc_counts": {
+    "fed_cbe_manual": 900
+  },
+  "doc_label_counts": {
+    "fed_cbe_manual": {
+      "contradiction": 300,
+      "entailment": 300,
+      "neutral": 300
+    }
+  },
+  "split_counts": {
+    "test": 900
+  },
+  "quality_checks": {
+    "candidate_equals_evidence_count": 0,
+    "neutral_unique_candidate_answers": 295,
+    "neutral_query_marker_hits": 0,
+    "old_shortcut_baseline_accuracy": 0.6667,
+    "unique_candidate_answers_by_label": {
+      "entailment": 300,
+      "contradiction": 300,
+      "neutral": 295
+    },
+    "unique_queries": 896
+  },
+  "review_status": "auto_generated_needs_human_review",
+  "recommended_next_step": "Manually review a stratified sample before using this as an academic benchmark.",
+  "intended_use": "heldout_document_test",
+  "heldout_warning": "Do not use this file for model selection or training; reserve it for final generalization checks on an unseen source document."
+}

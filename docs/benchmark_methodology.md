@@ -26,6 +26,19 @@ FinRegBench is designed to test whether a financial regulation RAG system can:
    neutral-only query markers, neutral answer diversity, and exact evidence
    leakage across splits.
 
+## Heldout Document Construction
+
+`data/finreg_heldout_cbe_test.jsonl` is built from the Federal Reserve
+Commercial Bank Examination Manual only. It is generated as a `test`-only file
+and is intended for final unseen-document evaluation.
+
+The heldout set keeps the same `entailment` and `contradiction` construction
+style as the main draft. Its `neutral` rows mix two harder patterns:
+same-document distractor passages and partially supported answers that append an
+unstated requirement to an otherwise grounded claim. This makes the neutral
+class closer to realistic RAG failures where retrieval or verification sees
+plausible regulatory text but not enough evidence for the full answer.
+
 ## Evaluation Layers
 
 Evaluate the system in separate layers rather than with one blended score.
@@ -83,6 +96,7 @@ Recommended baselines:
 - generation-only model without verification
 - oracle-evidence verifier upper bound
 - unsupported-answer risk detector using `P(neutral) + P(contradiction)`
+- unseen-document heldout evaluation using `data/finreg_heldout_cbe_test.jsonl`
 
 ## Why Oracle Evidence Matters
 

@@ -144,6 +144,16 @@ DOCS = [
     },
 ]
 
+HELDOUT_DOCS = [
+    {
+        "doc_id": "fed_cbe_manual",
+        "doc_title": "the Federal Reserve Commercial Bank Examination Manual",
+        "jurisdiction": "US",
+        "source_path": "source_documents/raw/Commercial Bank Examination.pdf",
+        "target_per_label": 300,
+    },
+]
+
 
 @dataclass(frozen=True)
 class Evidence:
@@ -383,6 +393,18 @@ def make_unsupported_claim(evidence: Evidence, rng: random.Random) -> str:
     )
 
 
+def make_supported_plus_unsupported_claim(evidence: Evidence, rng: random.Random) -> str:
+    supported = sentence_to_claim(evidence.text)
+    unsupported = make_unsupported_claim(evidence, rng)
+    connectors = [
+        "{supported}, and {unsupported}",
+        "{supported}; additionally, {unsupported}",
+        "{supported}. The same provision also says that {unsupported}",
+        "{supported}, provided that {unsupported}",
+    ]
+    return rng.choice(connectors).format(supported=supported.rstrip(" ."), unsupported=unsupported)
+
+
 def stable_id(*parts: str) -> str:
     joined = "\n".join(parts).encode("utf-8")
     return hashlib.sha1(joined).hexdigest()[:12]
@@ -399,8 +421,14 @@ def make_example(
     index: int,
     rng: random.Random,
     split: str,
+    id_prefix: str = "finreg3000",
+    neutral_distractor: Evidence | None = None,
+    neutral_claim: str | None = None,
+    neutral_generation_method: str | None = None,
 ) -> dict[str, Any]:
     question = make_question(evidence, rng)
+    ambiguity_type = "none"
+    difficulty = "easy"
 
     if label == "entailment":
         candidate_answer = frame_answer(evidence.text, rng)
@@ -409,10 +437,23 @@ def make_example(
         candidate_answer = frame_answer(mutate_contradiction(evidence.text), rng)
         generation_method = "rule_mutated_evidence_reframed"
     else:
-        candidate_answer = frame_answer(make_unsupported_claim(evidence, rng), rng)
-        generation_method = "topic_conditioned_unstated_detail"
+        if neutral_claim is not None:
+            candidate_answer = frame_answer(neutral_claim, rng)
+            generation_method = neutral_generation_method or "supported_plus_unstated_detail"
+            ambiguity_type = "partially_supported_extra_detail"
+            difficulty = "hard"
+        elif neutral_distractor is not None:
+            candidate_answer = frame_answer(neutral_distractor.text, rng)
+            generation_method = "same_document_distractor_reframed"
+            ambiguity_type = "distractor_evidence_not_supported_by_cited_span"
+            difficulty = "hard"
+        else:
+            candidate_answer = frame_answer(make_unsupported_claim(evidence, rng), rng)
+            generation_method = "topic_conditioned_unstated_detail"
+            ambiguity_type = "unstated_specific_detail"
+            difficulty = "medium"
 
-    row_id = f"finreg3000_{label}_{index:04d}_{stable_id(evidence.doc_id, evidence.text, candidate_answer)}"
+    row_id = f"{id_prefix}_{label}_{index:04d}_{stable_id(evidence.doc_id, evidence.text, candidate_answer)}"
     return {
         "id": row_id,
         "split": split,
@@ -428,20 +469,64 @@ def make_example(
         "source_pages": [evidence.page],
         "evidence_span": evidence.text,
         "topic": evidence.topic,
-        "ambiguity_type": "unstated_specific_detail" if label == "neutral" else "none",
-        "difficulty": "medium" if label == "neutral" else "easy",
+        "ambiguity_type": ambiguity_type,
+        "difficulty": difficulty,
         "generation_method": generation_method,
         "quality_score": round(evidence.quality_score, 4),
         "review_status": "auto_generated_needs_human_review",
     }
 
 
-def build_dataset(seed: int) -> list[dict[str, Any]]:
+def select_neutral_distractor(
+    target: Evidence,
+    candidates: list[Evidence],
+    rng: random.Random,
+) -> Evidence | None:
+    target_tokens = set(content_tokens(target.topic)) | set(content_tokens(target.text))
+    scored: list[tuple[int, float, Evidence]] = []
+
+    for candidate in candidates:
+        if candidate.text == target.text:
+            continue
+        if candidate.doc_id == target.doc_id and candidate.page == target.page:
+            continue
+
+        candidate_tokens = set(content_tokens(candidate.topic)) | set(content_tokens(candidate.text))
+        overlap = len(target_tokens & candidate_tokens)
+        if overlap == 0:
+            continue
+
+        length_penalty = abs(len(candidate.text) - len(target.text)) / 500.0
+        score = overlap + candidate.quality_score - length_penalty
+        scored.append((overlap, score, candidate))
+
+    if scored:
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        top_candidates = [item[2] for item in scored[:30]]
+        return rng.choice(top_candidates)
+
+    fallback = [
+        candidate
+        for candidate in candidates
+        if candidate.text != target.text
+        and not (candidate.doc_id == target.doc_id and candidate.page == target.page)
+    ]
+    return rng.choice(fallback) if fallback else None
+
+
+def build_dataset(
+    seed: int,
+    docs: list[dict[str, Any]] | None = None,
+    split_mode: str = "dev_test",
+    id_prefix: str = "finreg3000",
+    neutral_strategy: str = "synthetic",
+) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     all_rows: list[dict[str, Any]] = []
     global_index = 0
+    source_docs = docs if docs is not None else DOCS
 
-    for doc in DOCS:
+    for doc in source_docs:
         evidence = extract_evidence(doc)
         evidence = dedupe_evidence(evidence)
         if not evidence:
@@ -470,8 +555,54 @@ def build_dataset(seed: int) -> list[dict[str, Any]]:
             dev_count = max(1, target // 10)
             for label_index, evidence_item in enumerate(label_rows, start=1):
                 global_index += 1
-                split = "dev" if label_index <= dev_count else "test"
-                all_rows.append(make_example(evidence_item, label, global_index, rng, split))
+                if split_mode == "test_only":
+                    split = "test"
+                elif split_mode == "dev_test":
+                    split = "dev" if label_index <= dev_count else "test"
+                else:
+                    raise ValueError(f"unknown split mode: {split_mode}")
+
+                neutral_distractor = None
+                if label == "neutral":
+                    if neutral_strategy == "same_doc_distractor":
+                        neutral_distractor = select_neutral_distractor(evidence_item, evidence, rng)
+                        neutral_claim = None
+                        neutral_generation_method = None
+                    elif neutral_strategy == "supported_plus_unstated_detail":
+                        neutral_distractor = None
+                        neutral_claim = make_supported_plus_unsupported_claim(evidence_item, rng)
+                        neutral_generation_method = "supported_plus_unstated_detail"
+                    elif neutral_strategy == "mixed_hard":
+                        if label_index % 2:
+                            neutral_distractor = select_neutral_distractor(evidence_item, evidence, rng)
+                            neutral_claim = None
+                            neutral_generation_method = None
+                        else:
+                            neutral_distractor = None
+                            neutral_claim = make_supported_plus_unsupported_claim(evidence_item, rng)
+                            neutral_generation_method = "supported_plus_unstated_detail"
+                    elif neutral_strategy != "synthetic":
+                        raise ValueError(f"unknown neutral strategy: {neutral_strategy}")
+                    else:
+                        neutral_claim = None
+                        neutral_generation_method = None
+                else:
+                    neutral_claim = None
+                    neutral_generation_method = None
+
+                all_rows.append(
+                    make_example(
+                        evidence_item,
+                        label,
+                        global_index,
+                        rng,
+                        split,
+                        id_prefix=id_prefix,
+                        neutral_distractor=neutral_distractor,
+                        neutral_claim=neutral_claim,
+                        neutral_generation_method=neutral_generation_method,
+                    )
+                )
 
     rng.shuffle(all_rows)
     return all_rows
@@ -587,6 +718,26 @@ def main() -> None:
         default="data/sample_60_for_review.jsonl",
         help="Stratified review sample JSONL path",
     )
+    parser.add_argument(
+        "--heldout-output",
+        default="data/finreg_heldout_cbe_test.jsonl",
+        help="Heldout Commercial Bank Examination Manual test JSONL path",
+    )
+    parser.add_argument(
+        "--heldout-summary-output",
+        default="data/finreg_heldout_cbe_test_summary.json",
+        help="Heldout test summary JSON path",
+    )
+    parser.add_argument(
+        "--heldout-review-sample-output",
+        default="data/sample_60_heldout_cbe_for_review.jsonl",
+        help="Heldout stratified review sample JSONL path",
+    )
+    parser.add_argument(
+        "--skip-heldout",
+        action="store_true",
+        help="Only build the original 3,000-row draft dataset",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -594,6 +745,7 @@ def main() -> None:
     summary_path = Path(args.summary_output)
     review_sample_path = Path(args.review_sample_output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     review_sample_path.parent.mkdir(parents=True, exist_ok=True)
 
     rows = build_dataset(seed=args.seed)
@@ -603,7 +755,39 @@ def main() -> None:
     summary = build_summary(rows, output_path)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    result = {"main": summary}
+
+    if not args.skip_heldout:
+        heldout_path = Path(args.heldout_output)
+        heldout_summary_path = Path(args.heldout_summary_output)
+        heldout_review_sample_path = Path(args.heldout_review_sample_output)
+        heldout_path.parent.mkdir(parents=True, exist_ok=True)
+        heldout_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        heldout_review_sample_path.parent.mkdir(parents=True, exist_ok=True)
+
+        heldout_rows = build_dataset(
+            seed=args.seed + 1000,
+            docs=HELDOUT_DOCS,
+            split_mode="test_only",
+            id_prefix="finreg_heldout_cbe",
+            neutral_strategy="mixed_hard",
+        )
+        write_jsonl(heldout_path, heldout_rows)
+        write_review_sample(heldout_review_sample_path, heldout_rows, seed=args.seed + 1001)
+
+        heldout_summary = build_summary(heldout_rows, heldout_path)
+        heldout_summary["intended_use"] = "heldout_document_test"
+        heldout_summary["heldout_warning"] = (
+            "Do not use this file for model selection or training; reserve it for final "
+            "generalization checks on an unseen source document."
+        )
+        heldout_summary_path.write_text(
+            json.dumps(heldout_summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        result["heldout"] = heldout_summary
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

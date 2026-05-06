@@ -70,9 +70,25 @@ Before reporting results, also run:
 
 ```bash
 python3 scripts/check_dataset_quality.py data/finreg_3000_draft.jsonl
+python3 scripts/check_dataset_quality.py data/finreg_heldout_cbe_test.jsonl
 ```
 
 This is the realistic benchmark setting.
+
+### 4. Heldout Document Test
+
+After the verifier and retrieval settings are frozen, evaluate on:
+
+```text
+data/finreg_heldout_cbe_test.jsonl
+```
+
+This file is generated only from the Federal Reserve Commercial Bank Examination
+Manual and should not be mixed into training, validation, or checkpoint
+selection. Its neutral examples mix same-document distractor passages with
+partially supported answers that append unstated requirements, so it is intended
+to catch systems that over-accept plausible or partly grounded but unsupported
+answers.
 
 ## Expected Prediction File
 
@@ -94,6 +110,14 @@ Run:
 python3 scripts/evaluate_predictions.py \
   --gold data/finreg_3000_draft.jsonl \
   --predictions predictions/my_system.jsonl
+```
+
+For the heldout document check, change `--gold` to:
+
+```bash
+python3 scripts/evaluate_predictions.py \
+  --gold data/finreg_heldout_cbe_test.jsonl \
+  --predictions predictions/my_system_heldout.jsonl
 ```
 
 ## What A Good System Should Show

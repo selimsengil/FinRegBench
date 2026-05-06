@@ -1,5 +1,5 @@
 {
-  "output_path": "data/finreg_3000_draft.jsonl",
+  "output_path": "data\\finreg_3000_draft.jsonl",
   "total_rows": 3000,
   "label_counts": {
     "contradiction": 1000,
@@ -18,13 +18,25 @@
     },
     "ccpa": {
       "contradiction": 100,
-      "entailment": 100,
-      "neutral": 100
+      "neutral": 100,
+      "entailment": 100
     }
   },
   "split_counts": {
-    "dev": 300,
-    "test": 2700
+    "test": 2700,
+    "dev": 300
+  },
+  "quality_checks": {
+    "candidate_equals_evidence_count": 0,
+    "neutral_unique_candidate_answers": 1000,
+    "neutral_query_marker_hits": 0,
+    "old_shortcut_baseline_accuracy": 0.6667,
+    "unique_candidate_answers_by_label": {
+      "entailment": 1000,
+      "contradiction": 1000,
+      "neutral": 1000
+    },
+    "unique_queries": 2973
   },
   "review_status": "auto_generated_needs_human_review",
   "recommended_next_step": "Manually review a stratified sample before using this as an academic benchmark."

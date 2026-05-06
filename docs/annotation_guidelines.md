@@ -32,6 +32,10 @@ state enough information to verify it.
 Neutral is not the same as false. It means "not enough information from this
 evidence."
 
+For RAG gating experiments, neutral should be treated as unsupported-answer risk:
+the system should not present the candidate answer as grounded in the supplied
+evidence.
+
 ## Review Rules
 
 - Mark awkward or ungrammatical questions for rewrite.

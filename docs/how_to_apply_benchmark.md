@@ -25,6 +25,13 @@ evidence from the regulation PDFs and output a predicted label.
 - `contradiction`: the candidate answer conflicts with the retrieved evidence.
 - `neutral`: the retrieved evidence is insufficient, so the system should abstain.
 
+For an unsupported-answer risk detector, treat only `entailment` as safe. Treat
+both `neutral` and `contradiction` as risk signals, with a useful scalar score:
+
+```text
+unsupported_risk = P(neutral) + P(contradiction)
+```
+
 ## Recommended Evaluation Modes
 
 ### 1. Oracle Verification
@@ -58,6 +65,12 @@ Use the normal system:
 3. Pass retrieved chunks, `query`, and `candidate_answer` to the verifier.
 4. Predict `entailment`, `contradiction`, or `neutral`.
 5. Compare with the gold `label`.
+
+Before reporting results, also run:
+
+```bash
+python3 scripts/check_dataset_quality.py data/finreg_3000_draft.jsonl
+```
 
 This is the realistic benchmark setting.
 

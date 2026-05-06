@@ -18,6 +18,7 @@ with a candidate answer and an expected 3-way label.
 - `entailment`: answer is supported by the cited regulatory evidence.
 - `contradiction`: answer is contradicted by the cited regulatory evidence.
 - `neutral`: the evidence does not contain enough information to verify the answer.
+  For RAG gating, neutral is an unsupported-answer risk rather than a safe answer.
 
 ## Current Composition
 
@@ -27,6 +28,9 @@ with a candidate answer and an expected 3-way label.
 - `neutral`: 1,000
 - Basel Framework examples: 2,700
 - Consumer Credit Protection Act examples: 300
+- Supported answers are reframed rather than copied exactly from the evidence.
+- Neutral answers are generated from topic-conditioned unsupported details rather
+  than a small fixed answer list.
 
 ## Source Documents
 
@@ -66,6 +70,8 @@ Official source URLs and checksums are documented in
 - Some questions may be awkward, overly broad, or too close to the source text.
 - Some contradiction examples are rule-mutated and may require human cleanup.
 - Neutral examples test unsupported-detail abstention, not every type of ambiguity.
+- The generator reduces obvious shortcut patterns but does not replace human
+  validation or adversarial evaluation.
 - The benchmark is not legal advice and should not be used for compliance decisions.
 
 ## Recommended Validation

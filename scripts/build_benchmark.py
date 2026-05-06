@@ -48,24 +48,85 @@ QUESTION_TEMPLATES = [
     "What does {doc_title} state regarding {topic}?",
     "For {topic}, what position does {doc_title} set out?",
     "How does {doc_title} describe the rule for {topic}?",
+    "What should a reader conclude from {doc_title} about {topic}?",
+    "What is the relevant regulatory treatment of {topic} in {doc_title}?",
+    "How is {topic} addressed in {doc_title}?",
 ]
 
-NEUTRAL_QUESTION_TEMPLATES = [
-    "According to {doc_title}, what specific implementation channel is required for {topic}?",
-    "Under {doc_title}, what exact vendor or platform must be used for {topic}?",
-    "What named submission portal does {doc_title} require for {topic}?",
-    "What mandatory font size does {doc_title} prescribe for notices about {topic}?",
-    "What specific email address does {doc_title} require for reporting {topic}?",
+ANSWER_FRAMES = [
+    "The relevant provision states that {claim}.",
+    "The text indicates that {claim}.",
+    "The rule provides that {claim}.",
+    "The cited material says that {claim}.",
+    "The passage supports the statement that {claim}.",
 ]
 
-NEUTRAL_ANSWERS = [
-    "The text requires submission through a dedicated mobile application named FinReg Portal.",
-    "The text requires institutions to use a vendor-approved XML template supplied by a named private provider.",
-    "The text requires all notices to be printed in 14-point type with a regulator-approved watermark.",
-    "The text requires reporting through compliance-submissions@example.org within one business day.",
-    "The text requires a quarterly attestation signed by the chief technology officer using a prescribed digital seal.",
+UNSUPPORTED_ACTORS = [
+    "institutions",
+    "covered entities",
+    "regulated firms",
+    "reporting banks",
+    "compliance officers",
+    "senior management",
+    "supervised firms",
 ]
 
+UNSUPPORTED_ACTIONS = [
+    "submit a certified implementation memo",
+    "file a board-approved attestation",
+    "use a regulator-hosted intake form",
+    "retain a named external auditor",
+    "publish a customer-facing notice",
+    "send a machine-readable compliance report",
+    "obtain written supervisory pre-clearance",
+    "maintain a transaction-level exception log",
+    "complete an annual technology certification",
+    "provide a reconciliation workbook",
+]
+
+UNSUPPORTED_CHANNELS = [
+    "through the supervisory reporting portal",
+    "by encrypted email to the competent authority",
+    "using a prescribed XML schema",
+    "through a board governance pack",
+    "via a secure case-management system",
+    "in a regulator-approved spreadsheet template",
+    "through a public disclosure archive",
+    "using a named third-party compliance platform",
+]
+
+UNSUPPORTED_TIMINGS = [
+    "within one business day",
+    "within five calendar days",
+    "before the end of each quarter",
+    "no later than the next supervisory review",
+    "within 30 days of a material change",
+    "before the relevant exposure is booked",
+    "at least annually",
+    "within ten working days",
+]
+
+UNSUPPORTED_AUTHORITIES = [
+    "the chief compliance officer",
+    "the board risk committee",
+    "an external legal reviewer",
+    "the internal audit function",
+    "the chief technology officer",
+    "a designated senior manager",
+    "the model risk committee",
+    "the disclosure control officer",
+]
+
+UNSUPPORTED_RECORDS = [
+    "a signed certificate",
+    "an audit trail reference",
+    "a digital seal",
+    "a version-controlled policy appendix",
+    "a unique submission identifier",
+    "a customer notification record",
+    "a supervisory acknowledgement receipt",
+    "a management escalation note",
+]
 DOCS = [
     {
         "doc_id": "basel_framework",
@@ -277,14 +338,58 @@ def mutate_contradiction(text: str) -> str:
     return "It is not the case that " + text[0].lower() + text[1:]
 
 
+def sentence_to_claim(sentence: str) -> str:
+    claim = clean_text(sentence).rstrip(" .")
+    claim = re.sub(r"^(FAQ|Footnotes?|Introduction)\s+", "", claim, flags=re.I)
+    if claim and claim[0].isupper() and (len(claim) == 1 or claim[1].islower()):
+        claim = claim[0].lower() + claim[1:]
+    return claim
+
+
+def frame_answer(claim: str, rng: random.Random) -> str:
+    claim = sentence_to_claim(claim)
+    template = rng.choice(ANSWER_FRAMES)
+    answer = template.format(claim=claim)
+    return clean_text(answer)
+
+
+def make_unsupported_claim(evidence: Evidence, rng: random.Random) -> str:
+    actor = rng.choice(UNSUPPORTED_ACTORS)
+    action = rng.choice(UNSUPPORTED_ACTIONS)
+    channel = rng.choice(UNSUPPORTED_CHANNELS)
+    timing = rng.choice(UNSUPPORTED_TIMINGS)
+    authority = rng.choice(UNSUPPORTED_AUTHORITIES)
+    record = rng.choice(UNSUPPORTED_RECORDS)
+    topic = evidence.topic
+
+    templates = [
+        "{actor} must {action} for {topic} {channel} {timing}",
+        "{topic} requires {actor} to {action} {channel} and keep {record}",
+        "for {topic}, {authority} must approve {record} {timing}",
+        "{actor} handling {topic} must keep {record} and {action} {timing}",
+        "{topic} is subject to a process where {authority} must {action} {channel}",
+        "the required control for {topic} is {record} reviewed by {authority} {timing}",
+        "{actor} must document {topic} using {record} {channel}",
+        "{topic} requires {action} by {authority} {timing}",
+    ]
+    return rng.choice(templates).format(
+        actor=actor,
+        action=action,
+        channel=channel,
+        timing=timing,
+        authority=authority,
+        record=record,
+        topic=topic,
+    )
+
+
 def stable_id(*parts: str) -> str:
     joined = "\n".join(parts).encode("utf-8")
     return hashlib.sha1(joined).hexdigest()[:12]
 
 
-def make_question(evidence: Evidence, rng: random.Random, neutral: bool = False) -> str:
-    templates = NEUTRAL_QUESTION_TEMPLATES if neutral else QUESTION_TEMPLATES
-    template = rng.choice(templates)
+def make_question(evidence: Evidence, rng: random.Random) -> str:
+    template = rng.choice(QUESTION_TEMPLATES)
     return template.format(doc_title=evidence.doc_title, topic=evidence.topic)
 
 
@@ -293,24 +398,24 @@ def make_example(
     label: str,
     index: int,
     rng: random.Random,
+    split: str,
 ) -> dict[str, Any]:
-    neutral = label == "neutral"
-    question = make_question(evidence, rng, neutral=neutral)
+    question = make_question(evidence, rng)
 
     if label == "entailment":
-        candidate_answer = evidence.text
-        generation_method = "evidence_sentence"
+        candidate_answer = frame_answer(evidence.text, rng)
+        generation_method = "grounded_evidence_reframed"
     elif label == "contradiction":
-        candidate_answer = mutate_contradiction(evidence.text)
-        generation_method = "rule_mutated_evidence_sentence"
+        candidate_answer = frame_answer(mutate_contradiction(evidence.text), rng)
+        generation_method = "rule_mutated_evidence_reframed"
     else:
-        candidate_answer = rng.choice(NEUTRAL_ANSWERS)
-        generation_method = "invented_unstated_detail"
+        candidate_answer = frame_answer(make_unsupported_claim(evidence, rng), rng)
+        generation_method = "topic_conditioned_unstated_detail"
 
     row_id = f"finreg3000_{label}_{index:04d}_{stable_id(evidence.doc_id, evidence.text, candidate_answer)}"
     return {
         "id": row_id,
-        "split": "dev" if index % 10 == 0 else "test",
+        "split": split,
         "task": "financial_regulation_answer_verification",
         "label": label,
         "expected_label": label,
@@ -323,7 +428,7 @@ def make_example(
         "source_pages": [evidence.page],
         "evidence_span": evidence.text,
         "topic": evidence.topic,
-        "ambiguity_type": "unstated_specific_detail" if neutral else "none",
+        "ambiguity_type": "unstated_specific_detail" if label == "neutral" else "none",
         "difficulty": "medium" if label == "neutral" else "easy",
         "generation_method": generation_method,
         "quality_score": round(evidence.quality_score, 4),
@@ -338,6 +443,7 @@ def build_dataset(seed: int) -> list[dict[str, Any]]:
 
     for doc in DOCS:
         evidence = extract_evidence(doc)
+        evidence = dedupe_evidence(evidence)
         if not evidence:
             raise RuntimeError(f"No evidence extracted for {doc['doc_id']}")
 
@@ -360,18 +466,87 @@ def build_dataset(seed: int) -> list[dict[str, Any]]:
         }
 
         for label in ("entailment", "contradiction", "neutral"):
-            for evidence_item in by_label[label]:
+            label_rows = list(by_label[label])
+            dev_count = max(1, target // 10)
+            for label_index, evidence_item in enumerate(label_rows, start=1):
                 global_index += 1
-                all_rows.append(make_example(evidence_item, label, global_index, rng))
+                split = "dev" if label_index <= dev_count else "test"
+                all_rows.append(make_example(evidence_item, label, global_index, rng, split))
 
     rng.shuffle(all_rows)
     return all_rows
+
+
+def dedupe_evidence(evidence: list[Evidence]) -> list[Evidence]:
+    seen: set[str] = set()
+    deduped: list[Evidence] = []
+    for item in evidence:
+        key = re.sub(r"\s+", " ", item.text.lower()).strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def write_review_sample(path: Path, rows: list[dict[str, Any]], seed: int, per_label: int = 20) -> None:
+    rng = random.Random(seed)
+    sampled: list[dict[str, Any]] = []
+    for label in ("entailment", "contradiction", "neutral"):
+        label_rows = [row for row in rows if row["label"] == label]
+        sampled.extend(rng.sample(label_rows, min(per_label, len(label_rows))))
+    rng.shuffle(sampled)
+    write_jsonl(path, sampled)
+
+
+def compute_quality_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_label = {
+        label: [row for row in rows if row["label"] == label]
+        for label in ("entailment", "contradiction", "neutral")
+    }
+    query_markers = [
+        "specific implementation channel",
+        "exact vendor or platform",
+        "named submission portal",
+        "mandatory font size",
+        "specific email address",
+    ]
+    neutral_answers = {row["candidate_answer"] for row in by_label["neutral"]}
+    exact_entailment = sum(
+        1 for row in by_label["entailment"]
+        if row["candidate_answer"] == row["evidence_span"]
+    )
+    neutral_query_marker_hits = sum(
+        1 for row in rows
+        if any(marker in row["query"].lower() for marker in query_markers)
+    )
+    shortcut_correct = 0
+    for row in rows:
+        if row["candidate_answer"] == row["evidence_span"]:
+            predicted = "entailment"
+        elif row["candidate_answer"] in neutral_answers:
+            predicted = "neutral"
+        else:
+            predicted = "contradiction"
+        shortcut_correct += int(predicted == row["label"])
+
+    return {
+        "candidate_equals_evidence_count": exact_entailment,
+        "neutral_unique_candidate_answers": len(neutral_answers),
+        "neutral_query_marker_hits": neutral_query_marker_hits,
+        "old_shortcut_baseline_accuracy": round(shortcut_correct / len(rows), 4) if rows else 0.0,
+        "unique_candidate_answers_by_label": {
+            label: len({row["candidate_answer"] for row in label_rows})
+            for label, label_rows in by_label.items()
+        },
+        "unique_queries": len({row["query"] for row in rows}),
+    }
 
 
 def build_summary(rows: list[dict[str, Any]], output_path: Path) -> dict[str, Any]:
@@ -389,6 +564,7 @@ def build_summary(rows: list[dict[str, Any]], output_path: Path) -> dict[str, An
         "doc_counts": dict(by_doc),
         "doc_label_counts": dict(by_doc_label),
         "split_counts": dict(by_split),
+        "quality_checks": compute_quality_checks(rows),
         "review_status": "auto_generated_needs_human_review",
         "recommended_next_step": "Manually review a stratified sample before using this as an academic benchmark.",
     }
@@ -406,15 +582,23 @@ def main() -> None:
         default="data/finreg_3000_draft_summary.json",
         help="Summary JSON path",
     )
+    parser.add_argument(
+        "--review-sample-output",
+        default="data/sample_60_for_review.jsonl",
+        help="Stratified review sample JSONL path",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     output_path = Path(args.output)
     summary_path = Path(args.summary_output)
+    review_sample_path = Path(args.review_sample_output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    review_sample_path.parent.mkdir(parents=True, exist_ok=True)
 
     rows = build_dataset(seed=args.seed)
     write_jsonl(output_path, rows)
+    write_review_sample(review_sample_path, rows, seed=args.seed + 1)
 
     summary = build_summary(rows, output_path)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

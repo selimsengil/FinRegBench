@@ -15,11 +15,16 @@ FinRegBench is designed to test whether a financial regulation RAG system can:
 2. Split extracted text into candidate evidence sentences.
 3. Score candidate evidence using regulatory keywords and length heuristics.
 4. Generate three example types:
-   - supported answers copied or lightly normalized from evidence,
-   - contradicted answers produced with controlled mutations,
-   - neutral answers containing details not stated in the evidence.
+   - supported answers reframed from evidence without exact evidence copying,
+   - contradicted answers produced with controlled mutations and the same answer
+     framing style used for supported answers,
+   - neutral answers containing topic-conditioned details not stated in the
+     evidence.
 5. Attach source document, page, evidence span, and generation metadata.
 6. Split examples into development and test partitions.
+7. Run shortcut-oriented quality checks for exact evidence copying, old
+   neutral-only query markers, neutral answer diversity, and exact evidence
+   leakage across splits.
 
 ## Evaluation Layers
 
@@ -44,6 +49,10 @@ Given query, candidate answer, and retrieved evidence, predict one of:
 - `entailment`
 - `contradiction`
 - `neutral`
+
+For abstention-oriented RAG gates, `neutral` and `contradiction` are both risk
+classes: `contradiction` means the answer conflicts with evidence, while
+`neutral` means the evidence is insufficient to support the answer.
 
 Suggested metrics:
 
@@ -73,6 +82,7 @@ Recommended baselines:
 - hybrid retrieval plus NLI verifier
 - generation-only model without verification
 - oracle-evidence verifier upper bound
+- unsupported-answer risk detector using `P(neutral) + P(contradiction)`
 
 ## Why Oracle Evidence Matters
 

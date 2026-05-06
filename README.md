@@ -10,7 +10,9 @@ derived from two public regulatory documents:
 - Consumer Credit Protection Act: 300 examples
 
 Each example contains a user-style regulatory question, a candidate answer, a
-3-way verification label, and source evidence metadata.
+3-way verification label, and source evidence metadata. The current generator
+uses label-balanced question templates, reframed supported answers, and
+topic-conditioned unsupported claims to reduce surface-form shortcuts.
 
 ## Status
 
@@ -25,7 +27,8 @@ benchmark.
 
 - `entailment`: the candidate answer is supported by the source evidence.
 - `contradiction`: the candidate answer conflicts with the source evidence.
-- `neutral`: the source evidence does not provide enough information.
+- `neutral`: the source evidence does not provide enough information; for RAG
+  gating this should be treated as unsupported-answer risk.
 
 ## Repository Layout
 
@@ -42,6 +45,7 @@ FinRegBench/
     academic_release_plan.md
   scripts/
     build_benchmark.py
+    check_dataset_quality.py
     validate_schema.py
     evaluate_predictions.py
   source_documents/
@@ -57,6 +61,18 @@ Validate the dataset schema:
 
 ```bash
 python3 scripts/validate_schema.py data/finreg_3000_draft.jsonl
+```
+
+Run shortcut-oriented quality checks:
+
+```bash
+python3 scripts/check_dataset_quality.py data/finreg_3000_draft.jsonl
+```
+
+Rebuild the draft dataset and stratified review sample:
+
+```bash
+python3 scripts/build_benchmark.py
 ```
 
 Evaluate model predictions:
@@ -88,6 +104,9 @@ For each row:
 The benchmark does not require the model to freely generate an answer first.
 Instead, it tests whether the system can judge whether a proposed answer is
 supported, contradicted, or not answerable from the retrieved regulation text.
+For detector training, a conservative binary risk view can map
+`neutral` + `contradiction` to unsupported-answer risk and keep `entailment` as
+the only supported/safe class.
 
 For deeper experiments, use three modes:
 
